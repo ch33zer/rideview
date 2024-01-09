@@ -1,0 +1,11 @@
+    <nav class="navbar navbar-expand-lg bg-light">
+      <div class="container">
+        <a class="navbar-brand" href="{{ url_for('index')}}">RideView</a>
+        {% if current_user.is_authenticated %}
+        	<div class="ms-auto d-flex align-items-center">
+	        	<span class="mg">Logged in as {{ current_user.username }}</span>
+	          <a class="btn btn-primary ms-3" href="{{ url_for('logout') }}">Logout</a>
+	      	</div>
+	      {% endif %}
+      </div>
+    </nav>
