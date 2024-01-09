@@ -4,6 +4,8 @@
   	{% include 'navbar.html' %}
   	{% if activity %}
   		<h1>{{activity.name}}</h1>
+  		<p>Type: {{activity.type}}</p>
+  		<a href="https://strava.com/activities/{{activity.id}}">View on Strava</a>
   		<iframe src="https://www.mapchannels.com/routemaps3/map.htm?mode=2&route={{coordinate_str}}" width="100%" height="600px" style="padding:0px;border:solid 1px black" marginwidth="0" marginheight="0" frameborder="0" scrolling="no" webkitallowfullscreen mozallowfullscreen allowfullscreen allowtransparency="true"></iframe>
 			<br/><a target="_blank" href="https://www.mapchannels.com/AnimatedRouteMaps.aspx">Animated Route Maps</a>
   	{% endif %}

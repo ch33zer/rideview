@@ -22,7 +22,7 @@
 			        <div class="card h-20" onclick="handleClick('{{ activity.id }}')">
 			            <div class="card-body">
 			                <h5 class="card-title"><a href="{{ url_for('activity', activity_id=activity.id) }}">{{activity.name}}</a></h5>
-			                <p class="card-text">Type: {{ activity.type }}</p>
+			                <p class="card-text">Type: {{ activity.type }} <a href="https://strava.com/activities/{{activity.id}}">View on Strava</a></p>
 			            </div>
 			        </div>
 			    </div>
