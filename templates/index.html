@@ -19,7 +19,7 @@
       {% else %}
       	{% for activity in activities %}
 			    <div class="col-md-12">
-			        <div class="card h-20" onclick="handleClick('{{ activity.id }}')">
+			        <div class="card h-20">
 			            <div class="card-body">
 			                <h5 class="card-title"><a href="{{ url_for('activity', activity_id=activity.id) }}">{{activity.name}}</a></h5>
 			                <p class="card-text">Type: {{ activity.type }} <a href="https://strava.com/activities/{{activity.id}}">View on Strava</a></p>
@@ -27,6 +27,14 @@
 			        </div>
 			    </div>
 		    {% endfor %}
+        <div>
+        {% if page > 1 %}
+          <a href="{{ url_for('index', page=page-1 )}}">Prev page</a>
+        {% endif %}
+        {% if len(activities) == 30 %}
+          <a href="{{ url_for('index', page=page+1) }}">Next page</a>
+        {% endif %}
+        </div>
       {% endif %}
     </div>
   </body>
