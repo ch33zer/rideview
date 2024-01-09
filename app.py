@@ -126,7 +126,7 @@ def index():
     activities = None
     page = None
     if not current_user.is_anonymous:
-        page = request.args.get('page', 1)
+        page = request.args.get('page', 1, int)
         activities = get_activities(page)
     return render_template("index.html", activities=activities, page=page)
 
