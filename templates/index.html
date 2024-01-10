@@ -1,41 +1,52 @@
 <html>
-  {% include 'header.html' %}
-  <body>
-  	{% include 'navbar.html' %}
-    <div class="container mt-3">
-      {% with messages = get_flashed_messages() %}
-        {% if messages %}
-          <div class="alert alert-info" role="alert">
+{% include 'header.html' %}
+
+<body>
+  {% include 'navbar.html' %}
+  <div class="container mt-3">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-info" role="alert">
           {% for message in messages %}
             {{ message }}<br>
           {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
-      {% if not current_user.is_authenticated %}
-        <p>
-          <a class="btn btn-primary" href="{{ url_for('oauth2_authorize') }}">Login with Strava</a>
-        </p>
-      {% else %}
-      	{% for activity in activities %}
-			    <div class="col-md-12">
-			        <div class="card h-20">
-			            <div class="card-body">
-			                <h5 class="card-title"><a href="{{ url_for('activity', activity_id=activity.id) }}">{{activity.name}}</a></h5>
-			                <p class="card-text">Type: {{ activity.type }} <a href="https://strava.com/activities/{{activity.id}}">View on Strava</a></p>
-			            </div>
-			        </div>
-			    </div>
-		    {% endfor %}
-        <div>
-        {% if page > 1 %}
-          <a href="{{ url_for('index', page=page-1 )}}">Prev page</a>
-        {% endif %}
-        {% if activities|length == 30 %}
-          <a href="{{ url_for('index', page=page+1) }}">Next page</a>
-        {% endif %}
         </div>
       {% endif %}
+    {% endwith %}
+
+    {% if not current_user.is_authenticated %}
+    <div class="text-center">
+      <a class="btn btn-primary" href="{{ url_for('oauth2_authorize') }}">Login with Strava</a>
     </div>
-  </body>
+    {% else %}
+    <div class="row">
+      {% for activity in activities %}
+      <div class="col-md-4 mb-3">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">
+              <a href="{{ url_for('activity', activity_id=activity.id) }}">{{ activity.name }}</a>
+            </h5>
+            <p class="card-text">
+              Type: {{ activity.type }}
+              <a href="https://strava.com/activities/{{ activity.id }}">View on Strava</a>
+            </p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="d-flex justify-content-between">
+      {% if page > 1 %}
+      <a class="btn btn-outline-primary" href="{{ url_for('index', page=page-1) }}">Prev page</a>
+      {% endif %}
+      {% if activities|length == 30 %}
+      <a class="btn btn-outline-primary" href="{{ url_for('index', page=page+1) }}">Next page</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+</body>
+
 </html>
