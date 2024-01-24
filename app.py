@@ -5,7 +5,6 @@ import datetime
 import random
 import polyline
 import mapillary_api
-import geopy.distance
 from typing import Dict, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
