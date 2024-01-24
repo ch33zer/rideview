@@ -4,8 +4,12 @@ import requests
 import datetime
 import random
 import polyline
+import mapillary_api
+import geopy.distance
+from typing import Dict, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
+import math
 from flask import (
     Flask,
     redirect,
@@ -43,6 +47,7 @@ app.config["OAUTH2_INFO"] = {
 login = LoginManager(app)
 login.login_view = "index"
 
+mapillary = mapillary_api.MapillaryApi(os.environ.get("MAPIARRY_ACCESS_TOKEN"))
 
 @dataclass
 class User(UserMixin):
@@ -54,8 +59,7 @@ class User(UserMixin):
         return self.id
 
 
-MAX_POINT_SAMPLES = 10
-
+MAX_POINT_SAMPLES = 1000
 
 @dataclass
 class Activity:
@@ -63,22 +67,24 @@ class Activity:
     name: str
     type: str
     summary_polyline: str
+    full_polyline: str
 
     @staticmethod
     def from_json(json):
         id = json.get("id")
         name = json.get("name")
         summary_polyline = json.get("map").get("summary_polyline")
+        full_polyline = json.get("map").get("polyline")
         type = json.get("type")
-        return Activity(id, name, type, summary_polyline)
+        return Activity(id, name, type, summary_polyline, full_polyline)
+
+    def polyline(self):
+        return polyline.decode(self.full_polyline if self.full_polyline else self.summary_polyline)
 
     def sample_polyline(self):
-        points = polyline.decode(self.summary_polyline)
-        print("points", points)
+        points = self.polyline()
         step = max(len(points) // MAX_POINT_SAMPLES, 1)
-        print("Indexes", 0, len(points), step, list(range(0, len(points), step)))
         sampled = [points[i] for i in range(0, len(points), step)]
-        print("sampled", sampled)
         return sampled
 
 
@@ -135,13 +141,51 @@ def index():
 @login_required
 def activity(activity_id):
     activity = get_activity(activity_id)
-    coordinate_str = ",".join(f"{lat},{lng}" for lat, lng in activity.sample_polyline())
+    if not activity:
+        return abort(404)
+    coordinate_str = "[" + ",".join(f"[{lat},{lng}]" for lat, lng in activity.sample_polyline()) + "]"
     return render_template(
         "activity.html",
         activity=get_activity(activity_id),
         coordinate_str=coordinate_str,
+        tile_url=os.environ.get("TILE_URL"),
+        tile_attribution=os.environ.get("TILE_ATTRIBUTION")
     )
 
+def json2latlng(data):
+    try:
+        lat = float(data['lat'])
+        lng = float(data['lng'])
+        return {"lat": lat, "lng": lng}
+    except Exception as e:
+        pass
+    return None
+
+CLOSEST_ID = "closest_id"
+IMAGE_URL = "image_url"
+
+@app.route("/view", methods=["POST"])
+def photosOf():
+    body = request.get_json()
+    curr = json2latlng(body.get('curr'))
+    next = json2latlng(body.get('next'))
+    resp: Dict[str, Optional[str]] = {
+        CLOSEST_ID: None,
+        IMAGE_URL: None
+    }
+    if not curr:
+        return abort(401)
+    if next:
+        best = mapillary.images_near_facing(curr['lat'], curr['lng'], next['lat'], next['lng'])
+        if best:
+            resp[CLOSEST_ID] = best.id
+            resp[IMAGE_URL] = best.image_url
+    else:
+        best = mapillary.images_near(curr['lat'], curr['lng'])
+        if best:
+            resp[CLOSEST_ID] = best[0].id
+            resp[IMAGE_URL] = best[0].image_url
+    return resp
 
 @app.route("/logout")
 def logout():
@@ -235,7 +279,7 @@ def oauth2_callback():
 
     user = User(random.randint(1, 10000000), oauth2_token, username)
 
-    login_user(user, duration=datetime.timedelta(hours=6))
+    login_user(user, duration=datetime.timedelta(hours=6), remember=True)
     return redirect(url_for("index"))
 
 

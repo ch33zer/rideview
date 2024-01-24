@@ -1,5 +1,28 @@
 <html>
-{% include 'header.html' %}
+
+<head>
+	{% include 'header.html' %}
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+	integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+	crossorigin=""/>
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+	integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+	crossorigin=""></script>
+	<script src="{{url_for('static', filename='leaflet.geometryutil.js')}}"></script>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+	<style>
+		#map {
+			height: 512px;
+			width: 100%;
+		}
+		#viewer {
+			width: 100%;
+		}
+		#viewer-container {
+			min-height: 512px;
+		}
+	</style>
+</head>
 
 <body>
 	{% include 'navbar.html' %}
@@ -12,23 +35,150 @@
 				<a class="d-block" href="https://strava.com/activities/{{ activity.id }}">View on Strava</a>
 			</div>
 		</div>
-
-		<div class="row mt-3">
-			<div class="col-md-12">
-				<div class="embed-responsive embed-responsive-16by9">
-					<iframe class="embed-responsive-item"
-						src="https://www.mapchannels.com/routemaps3/map.htm?mode=2&route={{coordinate_str}}"
-						width="100%" height="600px" style="border:0;" allowfullscreen></iframe>
+		<div class="row justify-content-center">
+			<div class="col-md-6 mr">
+				<div id="map"></div>
+			</div>
+			<div class="col-md-6 ml">
+				<div id="viewer-container">
+					<img id="viewer" class="img-fluid"/>
+					<p id="viewer-txt" class="text-center" hidden>Failed to load image. There may be no imagery at this location.</p>
 				</div>
+				<div class="d-flex justify-content-center">
+					<nav aria-label="Next and previous image">
+						<ul class="pagination">
+							<li class="page-item"><a class="page-link" id="prev-photo">Previous</a></li>
+							<li class="page-item"><a class="page-link" id="next-photo">Next</a></li>
+						</ul>
+					</nav>
+					<button id="playbutton" type="button" class="btn btn-outline-primary"><i id="playicon" class="bi bi-play-circle"></i>Play</button>
+				</div>	
 			</div>
 		</div>
+			  
+		<div id="image-container" class="row"></div>
+		<script>
+			window.addEventListener('load', () => {
+				const COORDS = {{ coordinate_str }};
+				console.log("Points in polygon: ", COORDS.length);
+				console.log(COORDS);
+				let current_img = 0;
+				let map = L.map('map');
+				L.tileLayer('{{tile_url}}/{z}/{x}/{y}.png', {
+					maxZoom: 19,
+					attribution: '{{tile_attribution | safe}}'
+				}).addTo(map);
+				let polyline = L.polyline(COORDS, {color: 'blue'}).addTo(map);
+				const photo_icon_params = { ...L.Icon.Default.prototype.options, ...{
+					iconUrl: "{{url_for('static', filename='active-marker-icon.png')}}",
+					iconRetinaUrl: "{{url_for('static', filename='active-marker-icon-2x.png')}}",
+					shadowUrl: "{{url_for('static', filename='marker-shadow.png')}}" 
+				} };
+				const photo_icon = new L.Icon(photo_icon_params);
+				let photo_marker = null;
+				let photo_stretch = null;
+				polyline.on('click', e => {
+					const click_point = e.latlng;
+					let best = Infinity;
+					let best_bounds = null;
+					for (let i = 0; i < polyline.getLatLngs().length - 1; i++) {
+						let curr = polyline.getLatLngs()[i];
+						let next = polyline.getLatLngs()[i+1]
+						let dist = L.GeometryUtil.distanceSegment(map, click_point, curr, next);
+						if (dist < best) {
+							best_bounds = i;
+							best = dist;
+						}
+					}
+					if (!best_bounds) {
+						return;
+					}
+					if (photo_marker) {
+						photo_marker.setLatLng(click_point);
+					} else {
+						photo_marker = L.marker(click_point, {
+							icon: photo_icon,
+							zIndexOffset: 2
+						}).addTo(map)
+					}
+					loadImageForIndex(best_bounds);
 
-		<div class="row mt-2">
-			<div class="col-md-12">
-				<a class="btn btn-secondary" target="_blank"
-					href="https://www.mapchannels.com/AnimatedRouteMaps.aspx">Powered by from Animated Route Maps</a>
-			</div>
-		</div>
+				});
+				function loadImageForIndex(i) {
+					const latlngs = polyline.getLatLngs();
+					if (i < 0 || i >= latlngs.length) {
+						return;
+					}
+					current_img = i;
+					const before = latlngs[i];
+					const after = i < latlngs.length - 1 ? latlngs[i+1] : null;
+					if (photo_stretch) {
+						photo_stretch.remove()
+					}
+					photo_stretch = L.polyline([before, after], {color: 'red'}).addTo(map);
+					const img = document.querySelector("#viewer")
+					const viewer_txt = document.querySelector("#viewer-txt")
+					img.hidden = true;
+					viewer_txt.hidden = false;
+					viewer_txt.textContent = "Loading...";
+					fetch("/view", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},					
+						body: JSON.stringify({
+							curr: before,
+							next: after
+						})})
+					.then(resp => resp.json())
+					.then(image => {
+						if (image.image_url) {
+							viewer_txt.hidden = true;
+							img.hidden = false;
+							img.src = image.image_url;
+						} else {
+							viewer_txt.textContent = "Failed to load image. There may be no imagery at this location.";
+							viewer_txt.hidden = false;
+							img.hidden = true;
+						}
+					})
+				};
+				map.fitBounds(polyline.getBounds());
+				let start = L.marker(COORDS[0], {
+					zIndexOffset: 1
+				}).addTo(map)
+				let end = L.marker(COORDS[COORDS.length -1]).addTo(map);
+				loadImageForIndex(current_img);
+				document.querySelector("#prev-photo").addEventListener('click', e => {
+					loadImageForIndex(current_img - 1)
+				});
+				document.querySelector("#next-photo").addEventListener('click', e => {
+					loadImageForIndex(current_img + 1)
+				})
+				let PLAYING = false;
+				const PLAY_DELAY = 5000;
+				const playbutton = document.querySelector("#playbutton");
+				const playicon = document.querySelector("#playicon");
+				playbutton.addEventListener('click', e => {
+					if (!PLAYING) {
+						setTimeout(function advance() {
+							if (!PLAYING) {
+								return;
+							}
+							loadImageForIndex(current_img + 1)
+							setTimeout(advance, PLAY_DELAY);
+						}, PLAY_DELAY)
+						playicon.classList.remove('bi-play-circle')
+						playicon.classList.add('bi-pause-circle')
+					} else {
+						playicon.classList.remove('bi-pause-circle')
+						playicon.classList.add('bi-play-circle')
+					}
+					PLAYING = !PLAYING;
+				})
+
+			})
+		</script>
 		{% endif %}
 	</div>
 </body>
